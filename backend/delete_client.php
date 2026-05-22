@@ -1,9 +1,11 @@
 <?php
+
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type");
 
-// Handle preflight
+// PREFLIGHT
+
 if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
     exit(0);
 }
@@ -14,18 +16,43 @@ include "db.php";
 
 $data = json_decode(file_get_contents("php://input"), true);
 
-$id = $data['id'];
+// VALIDATION
 
-if (!$id) {
-    echo json_encode(["error" => "Client ID required"]);
+if (
+    !$data ||
+    !isset($data['id']) ||
+    !isset($data['user_id'])
+) {
+
+    echo json_encode([
+        "error" => "Invalid request"
+    ]);
+
     exit();
 }
 
-$sql = "DELETE FROM clients WHERE id = $id";
+$id = $data['id'];
+
+$user_id = $data['user_id'];
+
+// SECURE DELETE
+
+$sql = "
+    DELETE FROM clients
+    WHERE id = '$id'
+    AND user_id = '$user_id'
+";
 
 if ($conn->query($sql) === TRUE) {
-    echo json_encode(["message" => "Client deleted"]);
+
+    echo json_encode([
+        "message" => "Client deleted"
+    ]);
+
 } else {
-    echo json_encode(["error" => $conn->error]);
+
+    echo json_encode([
+        "error" => $conn->error
+    ]);
 }
 ?>

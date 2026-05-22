@@ -1,4 +1,5 @@
 <?php
+
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Headers: Content-Type");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
@@ -11,15 +12,34 @@ include "db.php";
 
 $data = json_decode(file_get_contents("php://input"), true);
 
-// 🔥 VALIDATION
-if (!$data || !isset($data['id'])) {
-    echo json_encode(["error" => "Invalid request"]);
+// VALIDATION
+
+if (
+    !$data ||
+    !isset($data['id']) ||
+    !isset($data['user_id'])
+) {
+
+    echo json_encode([
+        "error" => "Invalid request"
+    ]);
+
     exit;
 }
 
 $id = $data['id'];
 
-$conn->query("DELETE FROM products WHERE id = $id");
+$user_id = $data['user_id'];
 
-echo json_encode(["message" => "Product deleted"]);
+// SECURE DELETE
+
+$conn->query("
+    DELETE FROM products
+    WHERE id = '$id'
+    AND user_id = '$user_id'
+");
+
+echo json_encode([
+    "message" => "Product deleted"
+]);
 ?>

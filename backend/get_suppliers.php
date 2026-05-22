@@ -1,31 +1,27 @@
 <?php
 
 header("Access-Control-Allow-Origin: *");
+
 header("Content-Type: application/json");
 
 include "db.php";
 
-// GET USER ID
+$user_id = (int)$_GET['user_id'];
 
-$user_id = $_GET['user_id'];
-
-// FETCH ONLY CURRENT USER CLIENTS
-
-$sql = "
+$result = $conn->query("
     SELECT *
-    FROM clients
+    FROM suppliers
     WHERE user_id = '$user_id'
     ORDER BY id DESC
-";
+");
 
-$result = $conn->query($sql);
-
-$clients = [];
+$suppliers = [];
 
 while ($row = $result->fetch_assoc()) {
 
-    $clients[] = $row;
+    $suppliers[] = $row;
 }
 
-echo json_encode($clients);
+echo json_encode($suppliers);
+
 ?>

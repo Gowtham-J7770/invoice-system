@@ -1,9 +1,9 @@
 <?php
+
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type");
 
-// Handle preflight
 if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
     exit(0);
 }
@@ -14,103 +14,158 @@ include "db.php";
 
 $data = json_decode(file_get_contents("php://input"), true);
 
-$user_id = 1; // temp
-$client_id = $data['client_id'];
-$items = $data['items'];
-$total = $data['total'];
-$hasInventory = $data['hasInventory']; // 🔥 IMPORTANT
+$user_id = (int)($data['user_id'] ?? 0);
+$client_id = (int)($data['client_id'] ?? 0);
+$items = $data['items'] ?? [];
+$total = (float)($data['total'] ?? 0);
+$hasInventory = isset($data['hasInventory'])
+    ? (bool)$data['hasInventory']
+    : true;
 
-// 🔥 VALIDATION
-if (!$client_id || !$items || !$total) {
-    echo json_encode(["error" => "Missing data"]);
+//////////////////////////////////////////////////
+// VALIDATION
+//////////////////////////////////////////////////
+
+if (!$user_id || !$client_id || empty($items) || $total <= 0) {
+    echo json_encode([
+        "error" => "Missing data"
+    ]);
     exit();
 }
 
 //////////////////////////////////////////////////
-// 🔥 STEP 1 — STOCK VALIDATION BEFORE SAVE
+// STEP 1 — STOCK VALIDATION
 //////////////////////////////////////////////////
 
 if ($hasInventory) {
+
     foreach ($items as $item) {
 
-        $name = $item['name'];
-        $qty = $item['quantity'];
+        $product_id = (int)($item['product_id'] ?? 0);
+        $qty = (float)($item['quantity'] ?? 0);
 
-        $result = $conn->query("SELECT stock FROM products WHERE name='$name'");
-        $row = $result->fetch_assoc();
-
-        if (!$row) {
-            echo json_encode(["error" => "Product not found: $name"]);
+        if (!$product_id || $qty <= 0) {
+            echo json_encode([
+                "error" => "Invalid invoice item"
+            ]);
             exit();
         }
 
-        $currentStock = $row['stock'];
+        $result = $conn->query("
+            SELECT stock, name
+            FROM products
+            WHERE id = '$product_id'
+              AND user_id = '$user_id'
+        ");
 
-        // skip NULL stock
-        if ($currentStock !== null) {
+        if (!$result || $result->num_rows === 0) {
+            echo json_encode([
+                "error" => "Product not found"
+            ]);
+            exit();
+        }
 
-            if ($qty > $currentStock) {
-                echo json_encode([
-                    "error" => "Not enough stock for $name"
-                ]);
-                exit();
-            }
+        $row = $result->fetch_assoc();
+
+        $currentStock = (float)$row['stock'];
+
+        if ($qty > $currentStock) {
+            echo json_encode([
+                "error" =>
+                    "Not enough stock for " .
+                    $row['name']
+            ]);
+            exit();
         }
     }
 }
 
 //////////////////////////////////////////////////
-// 🔥 STEP 2 — CREATE INVOICE
+// STEP 2 — CREATE INVOICE
 //////////////////////////////////////////////////
 
 $invoice_number = "INV-" . time();
 
-$sql = "INSERT INTO invoices (user_id, client_id, invoice_number, subtotal, tax, total)
-        VALUES ('$user_id', '$client_id', '$invoice_number', '$total', 0, '$total')";
+$sql = "
+    INSERT INTO invoices (
+        user_id,
+        client_id,
+        invoice_number,
+        subtotal,
+        tax,
+        total
+    )
+    VALUES (
+        '$user_id',
+        '$client_id',
+        '$invoice_number',
+        '$total',
+        0,
+        '$total'
+    )
+";
 
-if ($conn->query($sql) === TRUE) {
-
-    $invoice_id = $conn->insert_id;
-
-    //////////////////////////////////////////////////
-    // 🔥 STEP 3 — SAVE ITEMS + REDUCE STOCK
-    //////////////////////////////////////////////////
-
-    foreach ($items as $item) {
-
-        $name = $item['name'];
-        $qty = $item['quantity'];
-        $price = $item['price'];
-        $item_total = $item['total'];
-
-        // 🔥 SAVE ITEM
-        $conn->query("INSERT INTO invoice_items (invoice_id, product_name, quantity, price, total)
-                      VALUES ('$invoice_id', '$name', '$qty', '$price', '$item_total')");
-
-        //////////////////////////////////////////////////
-        // 🔥 STOCK REDUCTION
-        //////////////////////////////////////////////////
-
-        if ($hasInventory) {
-
-            $result = $conn->query("SELECT stock FROM products WHERE name='$name'");
-            $row = $result->fetch_assoc();
-
-            $currentStock = $row['stock'];
-
-            // skip NULL
-            if ($currentStock !== null) {
-
-                $newStock = $currentStock - $qty;
-
-                $conn->query("UPDATE products SET stock=$newStock WHERE name='$name'");
-            }
-        }
-    }
-
-    echo json_encode(["message" => "Invoice saved successfully"]);
-
-} else {
-    echo json_encode(["error" => $conn->error]);
+if (!$conn->query($sql)) {
+    echo json_encode([
+        "error" => $conn->error
+    ]);
+    exit();
 }
+
+$invoice_id = $conn->insert_id;
+
+//////////////////////////////////////////////////
+// STEP 3 — SAVE ITEMS + REDUCE STOCK
+//////////////////////////////////////////////////
+
+foreach ($items as $item) {
+
+    $product_name = $conn->real_escape_string(
+        $item['name']
+    );
+
+    $qty = (float)$item['quantity'];
+    $price = (float)$item['price'];
+    $item_total = (float)$item['total'];
+    $product_id = (int)($item['product_id'] ?? 0);
+
+    // SAVE ITEM
+    $conn->query("
+        INSERT INTO invoice_items (
+            invoice_id,
+            product_name,
+            quantity,
+            price,
+            total
+        )
+        VALUES (
+            '$invoice_id',
+            '$product_name',
+            '$qty',
+            '$price',
+            '$item_total'
+        )
+    ");
+
+    //////////////////////////////////////////////////
+    // REDUCE STOCK
+    //////////////////////////////////////////////////
+
+    if ($hasInventory && $product_id) {
+
+        $conn->query("
+            UPDATE products
+            SET stock = stock - $qty
+            WHERE id = '$product_id'
+              AND user_id = '$user_id'
+        ");
+    }
+}
+
+echo json_encode([
+    "message" => "Invoice saved successfully",
+    "invoice_id" => $invoice_id,
+    "invoice_number" => $invoice_number
+]);
+
 ?>
