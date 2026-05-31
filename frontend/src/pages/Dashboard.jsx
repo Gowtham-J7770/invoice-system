@@ -18,7 +18,7 @@ import { useProcurement } from "../context/ProcurementContext";
 function Dashboard() {
   const user = JSON.parse(localStorage.getItem("user"));
 
-  const { cart, notifiedProducts } = useProcurement();
+  const { cart, notifiedProducts, removeNotifiedProduct } = useProcurement();
 
   //////////////////////////////////////////////////
   // KPI STATS
@@ -67,6 +67,16 @@ function Dashboard() {
     fetchInvoices();
 
     fetchLowStockProducts();
+
+    //////////////////////////////////////////////////
+    // AUTO REFRESH LOW STOCK
+    //////////////////////////////////////////////////
+
+    const interval = setInterval(() => {
+      fetchLowStockProducts();
+    }, 3000);
+
+    return () => clearInterval(interval);
   }, []);
 
   //////////////////////////////////////////////////
@@ -120,6 +130,18 @@ function Dashboard() {
       );
 
       const products = res.data || [];
+
+      //////////////////////////////////////////////////
+      // REMOVE RESTOCKED NOTIFIED PRODUCTS
+      //////////////////////////////////////////////////
+
+      notifiedProducts.forEach((id) => {
+        const stillLow = products.some((p) => String(p.id) === String(id));
+
+        if (!stillLow) {
+          removeNotifiedProduct(id);
+        }
+      });
 
       setLowStockWithSuppliers(
         products.filter((p) => Number(p.supplier_count) > 0),
@@ -289,8 +311,21 @@ function Dashboard() {
                   {notifiedProducts.some(
                     (id) => String(id) === String(product.id),
                   ) ? (
-                    <div className="mt-3 inline-block bg-blue-100 text-blue-700 px-4 py-2 rounded-lg text-sm font-medium">
-                      Supplier Notified
+                    <div className="mt-3 flex items-center gap-3">
+                      <div className="bg-blue-100 text-blue-700 px-4 py-2 rounded-lg text-sm font-medium">
+                        Supplier Notified
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          removeNotifiedProduct(product.id);
+
+                          setModalProduct(product);
+                        }}
+                        className="bg-black text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-800 transition"
+                      >
+                        Re-Notify
+                      </button>
                     </div>
                   ) : inCart ? (
                     <div className="mt-3 inline-block bg-green-100 text-green-700 px-4 py-2 rounded-lg text-sm font-medium">

@@ -1,35 +1,61 @@
 <?php
 
-header("Access-Control-Allow-Origin: *");
+//////////////////////////////////////////////////
+// CORS
+//////////////////////////////////////////////////
+
+header("Access-Control-Allow-Origin: http://localhost:5173");
+
+header("Access-Control-Allow-Credentials: true");
 
 header("Access-Control-Allow-Methods: POST, OPTIONS");
 
 header("Access-Control-Allow-Headers: Content-Type");
 
+header("Content-Type: application/json");
+
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+
     http_response_code(200);
+
     exit();
 }
 
+//////////////////////////////////////////////////
+// DB
+//////////////////////////////////////////////////
+
 include("../db.php");
 
+//////////////////////////////////////////////////
 // GET DATA
+//////////////////////////////////////////////////
 
-$data = json_decode(file_get_contents("php://input"));
+$data = json_decode(
+    file_get_contents("php://input")
+);
 
-$name = trim($data->name ?? '');
+$name =
+    trim($data->name ?? '');
 
-$shop_name = trim($data->shop_name ?? '');
+$shop_name =
+    trim($data->shop_name ?? '');
 
-$email = trim($data->email ?? '');
+$email =
+    trim($data->email ?? '');
 
-$password = trim($data->password ?? '');
+$password =
+    trim($data->password ?? '');
 
-$phone = trim($data->phone ?? '');
+$phone =
+    trim($data->phone ?? '');
 
-$address = trim($data->address ?? '');
+$address =
+    trim($data->address ?? '');
 
+//////////////////////////////////////////////////
 // VALIDATION
+//////////////////////////////////////////////////
 
 if (
     !$name ||
@@ -40,69 +66,101 @@ if (
 
     echo json_encode([
         "success" => false,
-        "message" => "Required fields missing"
+        "message" =>
+            "Required fields missing"
     ]);
 
     exit();
 }
 
+//////////////////////////////////////////////////
 // EMAIL VALIDATION
+//////////////////////////////////////////////////
 
-if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+if (
+    !filter_var(
+        $email,
+        FILTER_VALIDATE_EMAIL
+    )
+) {
 
     echo json_encode([
         "success" => false,
-        "message" => "Invalid email"
+        "message" =>
+            "Invalid email"
     ]);
 
     exit();
 }
 
+//////////////////////////////////////////////////
 // CHECK EXISTING EMAIL
+//////////////////////////////////////////////////
 
-$check = $conn->prepare("
-    SELECT id
-    FROM users
-    WHERE email = ?
-");
+$check =
+    $conn->prepare("
 
-$check->bind_param("s", $email);
+        SELECT id
+
+        FROM users
+
+        WHERE email = ?
+
+    ");
+
+$check->bind_param(
+    "s",
+    $email
+);
 
 $check->execute();
 
-$result = $check->get_result();
+$result =
+    $check->get_result();
 
-if ($result->num_rows > 0) {
+if (
+    $result->num_rows > 0
+) {
 
     echo json_encode([
         "success" => false,
-        "message" => "Email already exists"
+        "message" =>
+            "Email already exists"
     ]);
 
     exit();
 }
 
+//////////////////////////////////////////////////
 // HASH PASSWORD
+//////////////////////////////////////////////////
 
-$hashedPassword = password_hash(
-    $password,
-    PASSWORD_DEFAULT
-);
+$hashedPassword =
+    password_hash(
+        $password,
+        PASSWORD_DEFAULT
+    );
 
+//////////////////////////////////////////////////
 // INSERT USER
+//////////////////////////////////////////////////
 
-$stmt = $conn->prepare("
-    INSERT INTO users
-    (
-        name,
-        shop_name,
-        email,
-        password,
-        phone,
-        address
-    )
-    VALUES (?, ?, ?, ?, ?, ?)
-");
+$stmt =
+    $conn->prepare("
+
+        INSERT INTO users
+        (
+            name,
+            shop_name,
+            email,
+            password,
+            phone,
+            address
+        )
+
+        VALUES (?, ?, ?, ?, ?, ?)
+
+    ");
 
 $stmt->bind_param(
     "ssssss",
@@ -114,29 +172,45 @@ $stmt->bind_param(
     $address
 );
 
+//////////////////////////////////////////////////
 // SUCCESS
+//////////////////////////////////////////////////
 
 if ($stmt->execute()) {
 
-    $user_id = $conn->insert_id;
+    $user_id =
+        $conn->insert_id;
 
-    // FETCH CREATED USER
+    //////////////////////////////////////////////////
+    // FETCH USER
+    //////////////////////////////////////////////////
 
-    $userResult = $conn->query("
-        SELECT *
-        FROM users
-        WHERE id = '$user_id'
-    ");
+    $userResult =
+        $conn->query("
 
-    $user = $userResult->fetch_assoc();
+            SELECT *
 
+            FROM users
+
+            WHERE id = '$user_id'
+
+        ");
+
+    $user =
+        $userResult->fetch_assoc();
+
+    //////////////////////////////////////////////////
     // REMOVE PASSWORD
+    //////////////////////////////////////////////////
 
-    unset($user['password']);
+    unset(
+        $user['password']
+    );
 
     echo json_encode([
         "success" => true,
-        "message" => "Registration successful",
+        "message" =>
+            "Registration successful",
         "user" => $user
     ]);
 
@@ -144,7 +218,8 @@ if ($stmt->execute()) {
 
     echo json_encode([
         "success" => false,
-        "message" => "Registration failed"
+        "message" =>
+            "Registration failed"
     ]);
 }
 

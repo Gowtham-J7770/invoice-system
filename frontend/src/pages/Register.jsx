@@ -16,6 +16,22 @@ const Register = () => {
 
   const [error, setError] = useState("");
 
+  //////////////////////////////////////////////////
+  // OTP STATES
+  //////////////////////////////////////////////////
+
+  const [otp, setOtp] = useState("");
+
+  const [otpSent, setOtpSent] = useState(false);
+
+  const [emailVerified, setEmailVerified] = useState(false);
+
+  const [loadingOtp, setLoadingOtp] = useState(false);
+
+  //////////////////////////////////////////////////
+  // HANDLE CHANGE
+  //////////////////////////////////////////////////
+
   const handleChange = (e) => {
     setForm({
       ...form,
@@ -23,10 +39,97 @@ const Register = () => {
     });
   };
 
+  //////////////////////////////////////////////////
+  // SEND OTP
+  //////////////////////////////////////////////////
+
+  const sendOtp = async () => {
+    setError("");
+
+    if (!form.email.trim()) {
+      setError("Enter email first");
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailRegex.test(form.email)) {
+      setError("Enter valid email address");
+      return;
+    }
+
+    try {
+      setLoadingOtp(true);
+
+      const res = await api.post("auth/send-otp.php", {
+        email: form.email,
+      });
+
+      if (res.data.success) {
+        setOtpSent(true);
+
+        alert("OTP sent successfully");
+      } else {
+        setError(res.data.message || "Failed to send OTP");
+      }
+    } catch (err) {
+      console.log(err);
+
+      setError("Failed to send OTP");
+    } finally {
+      setLoadingOtp(false);
+    }
+  };
+
+  //////////////////////////////////////////////////
+  // VERIFY OTP
+  //////////////////////////////////////////////////
+
+  const verifyOtp = async () => {
+    setError("");
+
+    if (!otp.trim()) {
+      setError("Enter OTP");
+      return;
+    }
+
+    try {
+      const res = await api.post("auth/verify-otp.php", {
+        email: form.email,
+        otp,
+      });
+
+      if (res.data.success) {
+        setEmailVerified(true);
+
+        alert("Email verified successfully");
+      } else {
+        setError("Invalid OTP");
+      }
+    } catch (err) {
+      console.log(err);
+
+      setError("OTP verification failed");
+    }
+  };
+
+  //////////////////////////////////////////////////
+  // REGISTER
+  //////////////////////////////////////////////////
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     setError("");
+
+    //////////////////////////////////////////////////
+    // EMAIL VERIFIED CHECK
+    //////////////////////////////////////////////////
+
+    if (!emailVerified) {
+      setError("Verify your email first");
+      return;
+    }
 
     // NAME VALIDATION
     if (!form.name.trim()) {
@@ -40,15 +143,7 @@ const Register = () => {
       return;
     }
 
-    // EMAIL VALIDATION
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    if (!emailRegex.test(form.email)) {
-      setError("Enter a valid email address");
-      return;
-    }
-
-    // PHONE VALIDATION (required, exactly 10 digits)
+    // PHONE VALIDATION
     const phoneRegex = /^\d{10}$/;
 
     if (!phoneRegex.test(form.phone)) {
@@ -57,10 +152,6 @@ const Register = () => {
     }
 
     // PASSWORD VALIDATION
-    // Minimum 8 characters
-    // At least 1 uppercase letter
-    // At least 1 lowercase letter
-    // At least 1 number
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
 
     if (!passwordRegex.test(form.password)) {
@@ -80,13 +171,19 @@ const Register = () => {
       }
     } catch (err) {
       console.log(err);
+
       setError("Registration failed");
     }
   };
 
+  //////////////////////////////////////////////////
+  // UI
+  //////////////////////////////////////////////////
+
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="w-full max-w-6xl bg-white rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-2">
+
         {/* LEFT SIDE */}
         <div className="hidden lg:flex bg-[#08152f] text-white p-12 flex-col justify-between">
           <div>
@@ -119,6 +216,7 @@ const Register = () => {
         {/* RIGHT SIDE */}
         <div className="p-8 sm:p-10 overflow-y-auto max-h-screen">
           <div className="w-full max-w-md mx-auto">
+
             {/* Mobile Logo */}
             <div className="lg:hidden flex justify-center mb-6">
               <img
@@ -141,6 +239,8 @@ const Register = () => {
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
+
+              {/* NAME */}
               <input
                 type="text"
                 name="name"
@@ -150,6 +250,7 @@ const Register = () => {
                 className="w-full border border-gray-300 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600"
               />
 
+              {/* SHOP NAME */}
               <input
                 type="text"
                 name="shop_name"
@@ -159,15 +260,69 @@ const Register = () => {
                 className="w-full border border-gray-300 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600"
               />
 
-              <input
-                type="email"
-                name="email"
-                placeholder="Email Address"
-                value={form.email}
-                onChange={handleChange}
-                className="w-full border border-gray-300 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600"
-              />
+              {/* EMAIL + SEND OTP */}
+              <div className="flex gap-2">
 
+                <input
+                  type="email"
+                  name="email"
+                  placeholder="Email Address"
+                  value={form.email}
+                  onChange={handleChange}
+                  disabled={emailVerified}
+                  className="flex-1 border border-gray-300 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:bg-gray-100"
+                />
+
+                <button
+                  type="button"
+                  onClick={sendOtp}
+                  disabled={loadingOtp || emailVerified}
+                  className="bg-[#08152f] text-white px-4 rounded-xl disabled:opacity-50"
+                >
+                  {loadingOtp
+                    ? "Sending..."
+                    : emailVerified
+                    ? "Verified"
+                    : "Send OTP"}
+                </button>
+
+              </div>
+
+              {/* OTP FIELD */}
+              {otpSent && !emailVerified && (
+
+                <div className="flex gap-2">
+
+                  <input
+                    type="text"
+                    placeholder="Enter OTP"
+                    value={otp}
+                    onChange={(e) =>
+                      setOtp(e.target.value)
+                    }
+                    className="flex-1 border border-gray-300 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={verifyOtp}
+                    className="bg-green-600 text-white px-4 rounded-xl"
+                  >
+                    Verify
+                  </button>
+
+                </div>
+
+              )}
+
+              {/* VERIFIED BADGE */}
+              {emailVerified && (
+                <div className="bg-green-100 text-green-700 px-4 py-3 rounded-xl text-sm font-medium">
+                  Email verified successfully ✅
+                </div>
+              )}
+
+              {/* PASSWORD */}
               <input
                 type="password"
                 name="password"
@@ -177,6 +332,7 @@ const Register = () => {
                 className="w-full border border-gray-300 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600"
               />
 
+              {/* PHONE */}
               <input
                 type="text"
                 name="phone"
@@ -186,6 +342,7 @@ const Register = () => {
                 className="w-full border border-gray-300 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600"
               />
 
+              {/* ADDRESS */}
               <textarea
                 name="address"
                 placeholder="Shop Address"
@@ -195,22 +352,23 @@ const Register = () => {
                 className="w-full border border-gray-300 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none"
               />
 
-              {/* Error */}
+              {/* ERROR */}
               {error && (
                 <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm">
                   {error}
                 </div>
               )}
 
-              {/* Submit */}
+              {/* SUBMIT */}
               <button
                 type="submit"
-                className="w-full bg-[#08152f] hover:bg-[#0b1d42] text-white p-3 rounded-xl font-semibold transition duration-200 shadow"
+                disabled={!emailVerified}
+                className="w-full bg-[#08152f] hover:bg-[#0b1d42] disabled:opacity-50 text-white p-3 rounded-xl font-semibold transition duration-200 shadow"
               >
                 Create Account
               </button>
 
-              {/* Login Link */}
+              {/* LOGIN */}
               <p className="text-center text-gray-600 text-sm pt-2">
                 Already have an account?{" "}
                 <Link
@@ -220,7 +378,9 @@ const Register = () => {
                   Sign In
                 </Link>
               </p>
+
             </form>
+
           </div>
         </div>
       </div>

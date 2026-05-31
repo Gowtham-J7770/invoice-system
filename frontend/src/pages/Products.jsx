@@ -1,8 +1,19 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import ProcurementModal from "../components/layout/ProcurementModal";
+import { useProcurement } from "../context/ProcurementContext";
 
 function Products() {
   const user = JSON.parse(localStorage.getItem("user"));
+  //////////////////////////////////////////////////
+  // PROCUREMENT CART
+  //////////////////////////////////////////////////
+
+  const { cart } = useProcurement();
+
+  //////////////////////////////////////////////////
+  // EMPTY FORM
+  //////////////////////////////////////////////////
 
   const emptyForm = {
     name: "",
@@ -20,6 +31,11 @@ function Products() {
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [submitError, setSubmitError] = useState("");
+  const [modalProduct, setModalProduct] = useState(null);
+
+  const [restockProduct, setRestockProduct] = useState(null);
+
+  const [restockQuantity, setRestockQuantity] = useState("");
 
   const fetchProducts = async () => {
     try {
@@ -218,6 +234,34 @@ function Products() {
       .join(" - ");
   };
 
+  //////////////////////////////////////////////////
+  // RESTOCK
+  //////////////////////////////////////////////////
+
+  const handleRestock = async () => {
+    if (!restockQuantity) {
+      return;
+    }
+
+    try {
+      await axios.post("http://localhost/backend/restock_product.php", {
+        id: restockProduct.id,
+
+        user_id: user.id,
+
+        quantity: Number(restockQuantity),
+      });
+
+      fetchProducts();
+
+      setRestockProduct(null);
+
+      setRestockQuantity("");
+    } catch (err) {
+      console.log(err);
+    }
+  };
+
   return (
     <div className="p-6 bg-gray-100 min-h-screen">
       <h1 className="text-2xl font-bold mb-5">Products</h1>
@@ -230,6 +274,7 @@ function Products() {
             <label className="text-sm text-gray-600 block mb-1">
               Product Name *
             </label>
+
             <input
               type="text"
               name="name"
@@ -242,6 +287,7 @@ function Products() {
           {/* Variant */}
           <div>
             <label className="text-sm text-gray-600 block mb-1">Variant</label>
+
             <input
               type="text"
               name="variant"
@@ -255,6 +301,7 @@ function Products() {
           {/* Brand */}
           <div>
             <label className="text-sm text-gray-600 block mb-1">Brand</label>
+
             <input
               type="text"
               name="brand"
@@ -270,6 +317,7 @@ function Products() {
             <label className="text-sm text-gray-600 block mb-1">
               Inventory Type
             </label>
+
             <select
               name="inventory_type"
               value={form.inventory_type}
@@ -277,6 +325,7 @@ function Products() {
               className="w-full p-2 border rounded"
             >
               <option value="standard">Standard Product</option>
+
               <option value="measurable">Measurable Product</option>
             </select>
           </div>
@@ -287,6 +336,7 @@ function Products() {
               <label className="text-sm text-gray-600 block mb-1">
                 Base Unit *
               </label>
+
               <select
                 name="base_unit"
                 value={form.base_unit}
@@ -294,7 +344,9 @@ function Products() {
                 className="w-full p-2 border rounded"
               >
                 <option value="">Select Unit</option>
+
                 <option value="kg">Kilogram (kg)</option>
+
                 <option value="L">Litre (L)</option>
               </select>
             </div>
@@ -307,17 +359,13 @@ function Products() {
                 ? "Price per 1 Unit *"
                 : "Price *"}
             </label>
+
             <input
               type="number"
               step="0.01"
               name="price"
               value={form.price}
               onChange={handleChange}
-              placeholder={
-                form.inventory_type === "measurable"
-                  ? "Price per 1 kg or 1 L"
-                  : "Price per piece"
-              }
               className="w-full p-2 border rounded"
             />
           </div>
@@ -325,24 +373,23 @@ function Products() {
           {/* Stock */}
           <div>
             <label className="text-sm text-gray-600 block mb-1">Stock</label>
+
             <input
               type="number"
               step="0.01"
               name="stock"
               value={form.stock}
               onChange={handleChange}
-              placeholder={
-                form.inventory_type === "measurable" ? "e.g. 25" : "e.g. 24"
-              }
               className="w-full p-2 border rounded"
             />
           </div>
 
-          {/* Low Stock Alert */}
+          {/* Low Stock */}
           <div>
             <label className="text-sm text-gray-600 block mb-1">
               Low Stock Alert
             </label>
+
             <input
               type="number"
               step="0.01"
@@ -354,83 +401,7 @@ function Products() {
           </div>
         </div>
 
-        {/* Selling Options */}
-        {form.inventory_type === "measurable" && (
-          <div className="mt-6">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-lg">Selling Options</h3>
-
-              <button
-                type="button"
-                onClick={addSellingOption}
-                className="bg-green-600 text-white px-3 py-1 rounded"
-              >
-                Add Option
-              </button>
-            </div>
-
-            {form.selling_options.length === 0 && (
-              <p className="text-sm text-gray-500 mb-3">
-                Example: Quantity 0.5 → Price 26
-              </p>
-            )}
-
-            <div className="space-y-3">
-              {form.selling_options.map((option, index) => (
-                <div
-                  key={index}
-                  className="grid grid-cols-1 md:grid-cols-4 gap-3"
-                >
-                  <input
-                    type="text"
-                    placeholder="Label (500g)"
-                    value={option.label}
-                    onChange={(e) =>
-                      handleSellingOptionChange(index, "label", e.target.value)
-                    }
-                    className="p-2 border rounded"
-                  />
-
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="Quantity (0.5)"
-                    value={option.quantity}
-                    onChange={(e) =>
-                      handleSellingOptionChange(
-                        index,
-                        "quantity",
-                        e.target.value,
-                      )
-                    }
-                    className="p-2 border rounded"
-                  />
-
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="Price (26)"
-                    value={option.price}
-                    onChange={(e) =>
-                      handleSellingOptionChange(index, "price", e.target.value)
-                    }
-                    className="p-2 border rounded"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => removeSellingOption(index)}
-                    className="bg-red-500 text-white px-3 py-2 rounded"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Submit Buttons */}
+        {/* Buttons */}
         <div className="mt-6 flex gap-3">
           <button
             type="button"
@@ -451,6 +422,7 @@ function Products() {
           )}
         </div>
       </div>
+
       {/* Error */}
       {submitError && (
         <p className="text-red-500 text-sm mb-4">{submitError}</p>
@@ -477,17 +449,6 @@ function Products() {
                   <div className="font-medium">
                     {formatProductName(product)}
                   </div>
-
-                  {product.inventory_type === "measurable" &&
-                    product.selling_options?.length > 0 && (
-                      <div className="mt-2 text-xs text-gray-500 space-y-1">
-                        {product.selling_options.map((option) => (
-                          <div key={option.id}>
-                            {option.label} → ₹{option.price}
-                          </div>
-                        ))}
-                      </div>
-                    )}
                 </td>
 
                 {/* Type */}
@@ -530,34 +491,103 @@ function Products() {
                 </td>
 
                 {/* Actions */}
-                <td className="p-3 flex gap-2">
-                  <button
-                    onClick={() => handleEdit(product)}
-                    className="bg-blue-500 text-white px-3 py-1 rounded"
-                  >
-                    Edit
-                  </button>
+                <td className="p-3">
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <button
+                      onClick={() => handleEdit(product)}
+                      className="bg-blue-500 text-white px-3 py-1 rounded"
+                    >
+                      Edit
+                    </button>
 
-                  <button
-                    onClick={() => handleDelete(product.id)}
-                    className="bg-red-500 text-white px-3 py-1 rounded"
-                  >
-                    Delete
-                  </button>
+                    <button
+                      onClick={() => handleDelete(product.id)}
+                      className="bg-red-500 text-white px-3 py-1 rounded"
+                    >
+                      Delete
+                    </button>
+
+                    <button
+                      onClick={() => setRestockProduct(product)}
+                      className="bg-green-600 text-white px-3 py-1 rounded"
+                    >
+                      Restock
+                    </button>
+
+                    {cart.some((item) => item.product_id === product.id) ? (
+                      <div className="bg-green-100 text-green-700 px-3 py-1 rounded text-sm font-medium">
+                        Added To Cart
+                      </div>
+                    ) : product.has_suppliers ? (
+                      <button
+                        onClick={() => setModalProduct(product)}
+                        className="bg-black text-white px-3 py-1 rounded"
+                      >
+                        Order Now
+                      </button>
+                    ) : (
+                      <button
+                        disabled
+                        className="bg-gray-300 text-gray-600 px-3 py-1 rounded cursor-not-allowed"
+                      >
+                        No Supplier
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
-
-            {products.length === 0 && (
-              <tr>
-                <td colSpan="5" className="p-6 text-center text-gray-500">
-                  No products found.
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
       </div>
+
+      {/* RESTOCK MODAL */}
+
+      {restockProduct && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+            <h2 className="text-2xl font-bold mb-2">Restock Product</h2>
+
+            <p className="text-gray-500 mb-5">
+              {formatProductName(restockProduct)}
+            </p>
+
+            <input
+              type="number"
+              step="0.01"
+              placeholder="Enter quantity"
+              value={restockQuantity}
+              onChange={(e) => setRestockQuantity(e.target.value)}
+              className="w-full border p-3 rounded-xl mb-5"
+            />
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleRestock}
+                className="flex-1 bg-green-600 text-white py-3 rounded-xl"
+              >
+                Add Stock
+              </button>
+
+              <button
+                onClick={() => setRestockProduct(null)}
+                className="flex-1 bg-gray-200 py-3 rounded-xl"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PROCUREMENT MODAL */}
+
+      {modalProduct && (
+        <ProcurementModal
+          product={modalProduct}
+          onClose={() => setModalProduct(null)}
+        />
+      )}
     </div>
   );
 }
